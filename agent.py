@@ -1,4 +1,5 @@
 import torch
+import os
 import random
 import numpy as np
 from collections import deque
@@ -17,8 +18,12 @@ class Agent:
         self.epsilon = 0 # randomness
         self.gamma = 0.9 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
-        self.model = Linear_QNet(11, 256, 3)
+        self.model = Linear_QNet(15, 256, 3)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+
+        if os.path.isfile('./model/model.pth'):
+            self.model.load_state_dict(torch.load('./model/model.pth'))
+            print('Model loaded')
 
 
     def get_state(self, game):
@@ -33,25 +38,33 @@ class Agent:
         dir_u = game.direction == Direction.UP
         dir_d = game.direction == Direction.DOWN
 
+        if dir_l:
+            next_pt_st = point_l
+            next_pt_rt = point_u
+            next_pt_lt = point_d
+        elif dir_r:
+            next_pt_st = point_r
+            next_pt_rt = point_d
+            next_pt_lt = point_u
+        elif dir_u:
+            next_pt_st = point_u
+            next_pt_rt = point_r
+            next_pt_lt = point_l
+        elif dir_d:
+            next_pt_st = point_d
+            next_pt_rt = point_l
+            next_pt_lt = point_r
+
         state = [
             # Danger straight
-            (dir_r and game.is_collision(point_r)) or 
-            (dir_l and game.is_collision(point_l)) or 
-            (dir_u and game.is_collision(point_u)) or 
-            (dir_d and game.is_collision(point_d)),
+            game.is_collision(next_pt_st),
 
             # Danger right
-            (dir_u and game.is_collision(point_r)) or 
-            (dir_d and game.is_collision(point_l)) or 
-            (dir_l and game.is_collision(point_u)) or 
-            (dir_r and game.is_collision(point_d)),
+            game.is_collision(next_pt_rt),
 
             # Danger left
-            (dir_d and game.is_collision(point_r)) or 
-            (dir_u and game.is_collision(point_l)) or 
-            (dir_r and game.is_collision(point_u)) or 
-            (dir_l and game.is_collision(point_d)),
-            
+            game.is_collision(next_pt_lt),
+
             # Move direction
             dir_l,
             dir_r,
@@ -62,7 +75,20 @@ class Agent:
             game.food.x < game.head.x,  # food left
             game.food.x > game.head.x,  # food right
             game.food.y < game.head.y,  # food up
-            game.food.y > game.head.y  # food down
+            game.food.y > game.head.y,  # food down
+
+            # Danger ff straight
+            game.is_space(next_pt_st),
+
+            # Danger ff right
+            game.is_space(next_pt_rt),
+            
+            # Danger ff left
+            game.is_space(next_pt_lt),
+            
+            # length of snake normalized by game size
+            len(game.snake) / ((game.w / 20) * (game.h / 20))
+
             ]
 
         return np.array(state, dtype=int)
@@ -86,9 +112,9 @@ class Agent:
 
     def get_action(self, state):
         # random moves: tradeoff exploration / exploitation
-        self.epsilon = 80 - self.n_games
+        self.epsilon = 200 - self.n_games
         final_move = [0,0,0]
-        if random.randint(0, 200) < self.epsilon:
+        if random.randint(0, 500) < self.epsilon:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:

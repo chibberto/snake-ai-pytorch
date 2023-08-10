@@ -1,7 +1,7 @@
 import pygame
 import random
 from enum import Enum
-from collections import namedtuple
+from collections import namedtuple, deque
 import numpy as np
 
 pygame.init()
@@ -24,7 +24,7 @@ BLUE2 = (0, 100, 255)
 BLACK = (0,0,0)
 
 BLOCK_SIZE = 20
-SPEED = 40
+SPEED = 500
 
 class SnakeGameAI:
 
@@ -60,7 +60,6 @@ class SnakeGameAI:
         if self.food in self.snake:
             self._place_food()
 
-
     def play_step(self, action):
         self.frame_iteration += 1
         # 1. collect user input
@@ -76,9 +75,13 @@ class SnakeGameAI:
         # 3. check if game over
         reward = 0
         game_over = False
-        if self.is_collision() or self.frame_iteration > 100*len(self.snake):
+        if self.is_collision() :
             game_over = True
             reward = -10
+            return reward, game_over, self.score
+        if self.frame_iteration > 100*len(self.snake):
+            game_over = True
+            reward = -1
             return reward, game_over, self.score
 
         # 4. place new food or just move
@@ -108,6 +111,42 @@ class SnakeGameAI:
 
         return False
 
+
+    def is_space(self, pt=None):
+
+        if pt is None:
+            pt = self.head
+        
+        if pt in self.snake:
+            return False
+
+        directions = [(-BLOCK_SIZE, 0),
+                      (0, BLOCK_SIZE),
+                      (BLOCK_SIZE, 0),
+                      (0, -BLOCK_SIZE)]
+        
+        explored = []
+
+        to_explore = deque([pt])
+
+        while len(to_explore) > 0:
+
+            ex = to_explore.pop()
+
+            to_explore.extend([Point(ex.x + x, ex.y + y) for x,y in directions
+                      if (Point(ex.x + x, ex.y + y) not in self.snake)
+                        and (Point(ex.x + x, ex.y + y) not in explored)
+                        and (ex.x + x <= self.w - BLOCK_SIZE)
+                        and (ex.x + x >= 0)
+                        and (ex.y + y <= self.h - BLOCK_SIZE)
+                        and (ex.y +y >= 0)])
+            
+            explored.append(ex)
+
+            if len(explored) >= 2 * len(self.snake):
+                break
+        
+        return len(explored) / len(self.snake)
 
     def _update_ui(self):
         self.display.fill(BLACK)
